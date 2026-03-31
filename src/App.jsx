@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import TimerPage from './pages/TimerPage';
 import AnalysisPage from './pages/AnalysisPage';
 import SettingsPage from './pages/SettingsPage';
@@ -7,7 +7,7 @@ import './App.css';
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <div className="app-shell">
         <div className="app-content">
           <Routes>
@@ -18,6 +18,6 @@ export default function App() {
         </div>
         <Navbar />
       </div>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
