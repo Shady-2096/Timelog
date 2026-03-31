@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Timer from '../components/Timer';
 import Countdown from '../components/Countdown';
 import SaveModal from '../components/SaveModal';
@@ -19,40 +19,45 @@ import {
 } from '../utils/time';
 
 export default function TimerPage() {
-  const [settings] = useState(getSettings);
-  const [todayStr] = useState(getTodayStr);
+  const [settings, setSettings] = useState(getSettings);
+  const [todayStr, setTodayStr] = useState(getTodayStr);
   const [timerStart, setTimerStart] = useState(null);
   const [entries, setEntries] = useState([]);
   const [showModal, setShowModal] = useState(false);
-  const [pendingElapsed, setPendingElapsed] = useState(0);
-  const [dayStatus, setDayStatus] = useState('active'); // 'before' | 'active' | 'ended'
+  const [pendingSnapshot, setPendingSnapshot] = useState(null);
+  const [dayStatus, setDayStatus] = useState('active');
 
   const initDay = useCallback(() => {
+    // Re-read settings and date on every init (handles settings changes + midnight)
+    const freshSettings = getSettings();
+    setSettings(freshSettings);
     const today = getTodayStr();
+    setTodayStr(today);
+
     const now = Date.now();
-    const dayStart = getStartTimestamp(settings.dayStartTime, today);
+    const dayStart = getStartTimestamp(freshSettings.dayStartTime, today);
     const midnight = getMidnightTimestamp(today);
 
     if (now < dayStart) {
       setDayStatus('before');
       setTimerStart(null);
+      setEntries(getEntriesForDate(today));
       return;
     }
 
     if (now >= midnight) {
       setDayStatus('ended');
       setTimerStart(null);
+      setEntries(getEntriesForDate(today));
       return;
     }
 
     setDayStatus('active');
 
     const state = getDayState();
-    // If we have a saved timer start for today, use it
     if (state.date === today && state.currentTimerStart) {
       setTimerStart(state.currentTimerStart);
     } else {
-      // First open today — check if there are entries
       const todayEntries = getEntriesForDate(today);
       const start = todayEntries.length > 0
         ? todayEntries[todayEntries.length - 1].endTime
@@ -62,37 +67,66 @@ export default function TimerPage() {
     }
 
     setEntries(getEntriesForDate(today));
-  }, [settings.dayStartTime]);
+  }, []);
 
+  // Run on mount
   useEffect(() => {
     initDay();
   }, [initDay]);
 
+  // Re-init when app comes back to foreground (Bug 3 fix)
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState === 'visible') {
+        initDay();
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [initDay]);
+
+  // Bug 4 fix: snapshot endTime when user clicks "Save Block", not when modal confirms
   function handleSaveClick(elapsed) {
-    setPendingElapsed(elapsed);
+    setPendingSnapshot({ endTime: Date.now(), elapsed });
     setShowModal(true);
   }
 
   function handleConfirm(label) {
-    const now = Date.now();
+    const today = getTodayStr();
+    const endTime = pendingSnapshot.endTime;
     const entry = {
       id: generateId(),
-      date: todayStr,
+      date: today,
       label,
       startTime: timerStart,
-      endTime: now,
-      durationMinutes: Math.round((now - timerStart) / 60000),
+      endTime,
+      durationMinutes: Math.round((endTime - timerStart) / 60000),
     };
     const updated = saveEntry(entry);
-    setEntries(updated.filter((e) => e.date === todayStr));
-    setTimerStart(now);
-    saveDayState({ date: todayStr, currentTimerStart: now });
+    setEntries(updated.filter((e) => e.date === today));
+    setTimerStart(endTime);
+    saveDayState({ date: today, currentTimerStart: endTime });
     setShowModal(false);
+    setPendingSnapshot(null);
   }
 
+  // Bug 5 fix: recalculate timer start after delete
   function handleDelete(id) {
+    const today = getTodayStr();
     const updated = deleteEntry(id);
-    setEntries(updated.filter((e) => e.date === todayStr));
+    const todayEntries = updated.filter((e) => e.date === today);
+    setEntries(todayEntries);
+
+    // Recalculate timer start: last entry's endTime, or day start
+    if (dayStatus === 'active') {
+      const freshSettings = getSettings();
+      const dayStart = getStartTimestamp(freshSettings.dayStartTime, today);
+      const newTimerStart = todayEntries.length > 0
+        ? todayEntries[todayEntries.length - 1].endTime
+        : dayStart;
+      setTimerStart(newTimerStart);
+      saveDayState({ date: today, currentTimerStart: newTimerStart });
+    }
   }
 
   return (
@@ -126,14 +160,14 @@ export default function TimerPage() {
           <Timer startTimestamp={timerStart} onSave={handleSaveClick} />
         )}
 
-        <EntryList entries={entries} onDelete={handleDelete} />
+        <EntryList entries={entries} onDelete={handleDelete} dayStatus={dayStatus} />
       </main>
 
-      {showModal && (
+      {showModal && pendingSnapshot && (
         <SaveModal
-          elapsed={pendingElapsed}
+          elapsed={pendingSnapshot.elapsed}
           onConfirm={handleConfirm}
-          onCancel={() => setShowModal(false)}
+          onCancel={() => { setShowModal(false); setPendingSnapshot(null); }}
         />
       )}
     </div>

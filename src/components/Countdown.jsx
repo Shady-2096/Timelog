@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getMidnightTimestamp, formatDurationLong } from '../utils/time';
+import { getStartTimestamp, getMidnightTimestamp, formatDurationLong } from '../utils/time';
 
 export default function Countdown({ dateStr, dayStartTime }) {
   const [remaining, setRemaining] = useState('');
@@ -7,9 +7,18 @@ export default function Countdown({ dateStr, dayStartTime }) {
   useEffect(() => {
     function update() {
       const now = Date.now();
+      const dayStart = getStartTimestamp(dayStartTime, dateStr);
       const midnight = getMidnightTimestamp(dateStr);
-      const diff = midnight - now;
-      setRemaining(diff > 0 ? formatDurationLong(diff) : '00:00:00');
+      const totalTrackable = midnight - dayStart;
+
+      if (now < dayStart) {
+        // Day hasn't started — show full trackable time
+        setRemaining(formatDurationLong(totalTrackable));
+      } else if (now >= midnight) {
+        setRemaining('00:00:00');
+      } else {
+        setRemaining(formatDurationLong(midnight - now));
+      }
     }
     update();
     const id = setInterval(update, 1000);

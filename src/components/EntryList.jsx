@@ -1,7 +1,8 @@
 import { formatDuration, formatTime } from '../utils/time';
 
-export default function EntryList({ entries, onDelete }) {
+export default function EntryList({ entries, onDelete, dayStatus }) {
   if (entries.length === 0) {
+    if (dayStatus === 'before' || dayStatus === 'ended') return null;
     return (
       <div className="entry-list-empty">
         <p>No entries yet today. Your timer is running!</p>
@@ -32,9 +33,10 @@ export default function EntryList({ entries, onDelete }) {
 }
 
 function stringToColor(str) {
+  const normalized = str.toLowerCase();
   let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < normalized.length; i++) {
+    hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
   }
   const h = Math.abs(hash) % 360;
   return `hsl(${h}, 55%, 55%)`;

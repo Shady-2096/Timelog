@@ -1,12 +1,11 @@
 import { useState, useMemo } from 'react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, Legend,
+  ResponsiveContainer,
 } from 'recharts';
-import { getEntries, getAllDates } from '../utils/storage';
-import { getTodayStr, formatMinutesToReadable } from '../utils/time';
+import { getEntries, getSettings } from '../utils/storage';
+import { getTodayStr, formatMinutesToReadable, formatDateStr } from '../utils/time';
 import Countdown from '../components/Countdown';
-import { getSettings } from '../utils/storage';
 
 const COLORS = [
   '#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6',
@@ -16,26 +15,28 @@ const COLORS = [
 export default function AnalysisPage() {
   const settings = getSettings();
   const todayStr = getTodayStr();
-  const allDates = useMemo(() => getAllDates(), []);
   const [range, setRange] = useState('today');
   const [customDate, setCustomDate] = useState(todayStr);
+  // Re-read from localStorage on every render so data is always fresh
+  const allEntries = getEntries();
 
   const entries = useMemo(() => {
-    const all = getEntries();
-    if (range === 'today') return all.filter((e) => e.date === todayStr);
+    if (range === 'today') return allEntries.filter((e) => e.date === todayStr);
     if (range === '7days') {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 7);
-      return all.filter((e) => new Date(e.date) >= cutoff);
+      const cutoffStr = formatDateStr(cutoff);
+      return allEntries.filter((e) => e.date >= cutoffStr);
     }
     if (range === '30days') {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 30);
-      return all.filter((e) => new Date(e.date) >= cutoff);
+      const cutoffStr = formatDateStr(cutoff);
+      return allEntries.filter((e) => e.date >= cutoffStr);
     }
-    if (range === 'custom') return all.filter((e) => e.date === customDate);
-    return all;
-  }, [range, customDate, todayStr]);
+    if (range === 'custom') return allEntries.filter((e) => e.date === customDate);
+    return allEntries;
+  }, [allEntries, range, customDate, todayStr]);
 
   const aggregated = useMemo(() => {
     const map = {};
